@@ -176,7 +176,19 @@ function renderMeetings(date) {
   $("meetList").innerHTML = `<div class="list">${html || `<p class="empty-note">ما عندك اجتماعات جاية. أضيفي اجتماعات الـ 1:1 هنا، ويوصلك تذكير الصبح وقبل الموعد.</p>`}</div>`;
 }
 
+function renderResearch() {
+  const r = D.research;
+  if (!r || !r.ideas) { $("research").innerHTML = ""; return; }
+  $("research").innerHTML = `<div class="card research"><b>💡 أفكار الأسبوع <small>${esc(r.date || "")}</small></b>
+    ${r.headline ? `<p>${esc(r.headline)}</p>` : ""}
+    ${r.ideas.map((i) => `<details><summary><span class="pf">${esc(i.platform || "")}</span> ${esc(i.title)}</summary>${i.hook ? `<p><b>الهوك:</b> ${esc(i.hook)}</p>` : ""}${i.why ? `<p class="why">${esc(i.why)}</p>` : ""}</details>`).join("")}
+    ${(r.competitors || []).length ? `<details><summary>👀 إيش يسوون المنافسين</summary>${r.competitors.map((c) => `<p><b>${esc(c.name)}</b> · ${esc(c.platform || "")}<br>${esc(c.what_worked || "")}${c.idea_for_you ? `<br><span class="why">فكرتك: ${esc(c.idea_for_you)}</span>` : ""}</p>`).join("")}</details>` : ""}
+    ${(r.trends || []).length ? `<details><summary>📈 ترندات واحتياج السوق</summary><ul>${r.trends.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></details>` : ""}
+  </div>`;
+}
+
 function renderNotes() {
+  renderResearch();
   const notes = [...(D.notes || [])].sort((a, b) => (b.at || "").localeCompare(a.at || ""));
   $("noteList").innerHTML = `<div class="list">${notes.map((n) => `<div class="item"><div class="txt">${esc(n.text)}<small>${n.from === "telegram" ? "من تيليجرام · " : ""}${esc((n.at || "").slice(0, 10))}</small></div><button class="del" data-delnote="${esc(n.id)}">حذف</button></div>`).join("") || `<p class="empty-note">لسه ما فيه نوت.</p>`}</div>`;
 }
@@ -272,6 +284,7 @@ async function boot() {
   try {
     const entries = await Promise.all(Object.entries(FILES).map(async ([k, f]) => [k, (await readFile(f)).data]));
     entries.forEach(([k, v]) => (D[k] = v));
+    try { D.research = (await readFile("research/latest.json")).data; } catch { D.research = null; } // optional, written by the weekly research
     D.roadmap ||= { tasks: [] };
     setSync(LOCAL ? "تجربة محلية" : "محفوظ ✓");
     $("mDate").value = today();

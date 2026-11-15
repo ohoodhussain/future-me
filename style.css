@@ -127,3 +127,12 @@ textarea{resize:vertical}
 @keyframes pop{from{transform:scale(.85);opacity:0}to{transform:none;opacity:1}}
 .toast{position:fixed;z-index:30;inset-inline:16px;bottom:calc(92px + env(safe-area-inset-bottom,0px));margin:0 auto;max-width:420px;background:var(--card2);border:1px solid rgba(227,194,126,.5);color:var(--fg);border-radius:16px;padding:12px 14px;text-align:center;font-weight:700;animation:pop .4s ease}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.research{display:flex;flex-direction:column;gap:8px;border-color:rgba(227,194,126,.4)}
+.research > b{color:var(--gold);font-family:var(--display);font-size:17px}
+.research > b small{color:var(--dim);font-family:var(--body);font-size:11.5px}
+.research p{margin:0;font-size:13.5px;color:var(--pale)}
+.research details{border-top:1px solid var(--line);padding-top:8px}
+.research summary{cursor:pointer;font-weight:700;font-size:14px;line-height:1.5}
+.research .pf{font-size:11px;color:var(--mint);border:1px solid var(--line);border-radius:99px;padding:0 8px;margin-inline-end:4px}
+.research .why{color:var(--muted);font-size:12.5px}
+.research ul{margin:6px 0 0;padding-inline-start:18px;font-size:13px;color:var(--pale)}
