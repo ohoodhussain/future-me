@@ -57,7 +57,7 @@ function update(path, mutate, message) {
 }
 
 const FILES = { profile: "profile.json", roadmap: "roadmap.json", habits: "habits.json", goals: "goals.json", state: "state.json",
-  notes: "notes.json", meetings: "meetings.json", motivation: "motivation.json", items: "items.json", expenses: "expenses.json" };
+  notes: "notes.json", meetings: "meetings.json", motivation: "motivation.json", items: "items.json", expenses: "expenses.json", income: "income.json" };
 const KEY = Object.fromEntries(Object.entries(FILES).map(([k, v]) => [v, k]));
 const D = {};
 
@@ -171,22 +171,39 @@ function renderGoals(date, state) {
   const groups = {};
   D.goals.forEach((g) => (groups[g.group] ||= []).push(g));
   $("goalGroups").innerHTML = Object.entries(groups).map(([name, gs]) => `<div class="grp"><b>${esc(name)}</b>${gs.map((g) => {
-    const cur = P.autoGoalValue(g, state), pct = g.target && cur != null ? Math.min(100, (cur / g.target) * 100) : null;
+    const mm = date.slice(0, 7), cur = g.id === "income" ? Math.round(P.incomeInMonth(D.income, mm).total - P.spentInMonth(D.expenses, mm).total) : P.autoGoalValue(g, state), pct = g.target && cur != null ? Math.min(100, (cur / g.target) * 100) : null;
     return `<button class="goal" data-goal="${g.id}"><div class="row"><span>${esc(g.name)}</span><em>${P.arNum(cur)} / ${P.arNum(g.target)} ${esc(g.unit)}</em></div>
       <div class="bar ${pct == null ? "empty" : ""}"><i style="width:${pct ?? 0}%"></i></div></button>`; }).join("")}</div>`).join("");
 }
 
 const SAR = (n) => `${P.arNum(Math.round(n))} ريال`;
 const KIND = { monthly: "شهري", yearly: "سنوي", once: "مرة وحدة" };
+let moneyYear = null;
 function renderMoney(date) {
-  const ex = D.expenses || [], month = date.slice(0, 7), year = date.slice(0, 4);
-  const m = P.spentInMonth(ex, month), run = P.monthlyRunRate(ex, month), y = P.spentInYear(ex, year, month);
+  const ex = D.expenses || [], inc = D.income || [], month = date.slice(0, 7), year = date.slice(0, 4);
+  const m = P.spentInMonth(ex, month), run = P.monthlyRunRate(ex, month), mi = P.incomeInMonth(inc, month).total, net = mi - m.total;
   $("moneySum").innerHTML = `
-    <div class="ms big"><span>صرفتي على الشغل هذا الشهر</span><b>${SAR(m.total)}</b></div>
-    <div class="ms"><span>اشتراكاتك تكلفك شهرياً</span><b>${SAR(run)}</b></div>
-    <div class="ms"><span>من بداية ${P.ar(year)}</span><b>${SAR(y)}</b></div>`;
+    <div class="ms big ${net < 0 ? "neg" : ""}"><span>صافي ${P.MONTH_NAMES[Number(month.slice(5)) - 1]} (الدخل ناقص المصاريف)</span><b>${net < 0 ? "−" : ""}${SAR(Math.abs(net))}</b></div>
+    <div class="ms"><span>دخلك هذا الشهر</span><b class="pos">${SAR(mi)}</b></div>
+    <div class="ms"><span>مصاريف الشغل هذا الشهر</span><b>${SAR(m.total)}</b></div>
+    <div class="ms wide"><span>اشتراكاتك تكلفك شهرياً</span><b>${SAR(run)}</b></div>`;
+
+  // year table (tracking starts Nov 2026)
+  const years = []; for (let y = 2026; y <= Math.max(2027, Number(year)); y++) years.push(String(y));
+  moneyYear ||= year;
+  $("yearSeg").innerHTML = years.map((y) => `<button data-year="${y}" class="${y === moneyYear ? "on" : ""}">${P.ar(y)}</button>`).join("");
+  const rows = P.yearTable(moneyYear, inc, ex).filter((r) => r.month >= "2026-11");
+  const sum = rows.filter((r) => r.month <= month).reduce((a, r) => ({ income: a.income + r.income, expenses: a.expenses + r.expenses, net: a.net + r.net }), { income: 0, expenses: 0, net: 0 });
+  const cell = (v, cls = "") => `<td class="${cls}">${v ? (v < 0 ? "−" : "") + P.arNum(Math.round(Math.abs(v))) : "—"}</td>`;
+  $("yearTbl").innerHTML = `<thead><tr><th>الشهر</th><th>الدخل</th><th>المصاريف</th><th>الصافي</th></tr></thead><tbody>` +
+    rows.map((r) => `<tr class="${r.month > month ? "future" : ""}${r.month === month ? " now" : ""}"><td>${P.MONTH_NAMES[Number(r.month.slice(5)) - 1]}</td>${cell(r.income, "pos")}${cell(r.expenses)}${cell(r.net, r.net < 0 ? "negc" : "")}</tr>`).join("") +
+    `</tbody><tfoot><tr><td>المجموع</td>${cell(sum.income, "pos")}${cell(sum.expenses)}${cell(sum.net, sum.net < 0 ? "negc" : "")}</tr></tfoot>`;
+
+  const recentInc = [...inc].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 12);
+  $("incList").innerHTML = recentInc.length ? `<div class="list"><div class="day-h">آخر الدخل</div>${recentInc.map((x) => `<div class="item"><div class="txt"><b class="pos">+${P.arNum(x.amount)} ${x.currency === "USD" ? "دولار" : "ريال"}</b> · ${esc(x.source)}<small>${esc(x.date)}${x.note ? " · " + esc(x.note) : ""}</small></div><button class="del" data-delinc="${esc(x.id)}">حذف</button></div>`).join("")}</div>` : "";
+
   const cats = Object.entries(m.byCat).sort((a, b) => b[1] - a[1]);
-  $("moneyCats").innerHTML = cats.length ? `<div class="grp"><b>وين راحت فلوس الشهر؟</b>${cats.map(([c, v]) => `<div class="g"><div class="row"><span>${esc(c)}</span><em>${SAR(v)}</em></div><div class="bar"><i style="width:${(v / m.total) * 100}%"></i></div></div>`).join("")}</div>` : "";
+  $("moneyCats").innerHTML = cats.length ? `<div class="grp"><b>وين راحت مصاريف الشهر؟</b>${cats.map(([c, v]) => `<div class="g"><div class="row"><span>${esc(c)}</span><em>${SAR(v)}</em></div><div class="bar"><i style="width:${(v / m.total) * 100}%"></i></div></div>`).join("")}</div>` : "";
   const act = ex.filter((e) => e.kind !== "once" && !e.end), done = ex.filter((e) => e.kind === "once" || e.end).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   const row = (e) => `<div class="item"><div class="txt"><b>${esc(e.name)}</b> · ${P.arNum(e.amount)} ${e.currency === "USD" ? "دولار" : "ريال"}<small>${KIND[e.kind]} · ${esc(e.category || "")} · ${esc(e.date)}${e.end ? ` · ألغيته ${esc(e.end)}` : ""}</small></div>
     <div class="acts">${e.kind !== "once" && !e.end ? `<button class="del" data-cancelexp="${esc(e.id)}">ألغيته</button>` : ""}<button class="del" data-delexp="${esc(e.id)}">حذف</button></div></div>`;
@@ -259,6 +276,13 @@ document.addEventListener("click", (e) => {
     if (!t.classList.contains("arm")) { t.classList.add("arm"); t.textContent = "متأكدة؟"; setTimeout(() => { t.classList.remove("arm"); t.textContent = "حذف"; }, 3000); return; }
     update(FILES.expenses, (arr) => { const i = arr.findIndex((y) => y.id === id); if (i >= 0) arr.splice(i, 1); }, "حذف مصروف");
     render();
+  } else if (t.dataset.year) {
+    moneyYear = t.dataset.year; render();
+  } else if (t.dataset.delinc) {
+    const id = t.dataset.delinc;
+    if (!t.classList.contains("arm")) { t.classList.add("arm"); t.textContent = "متأكدة؟"; setTimeout(() => { t.classList.remove("arm"); t.textContent = "حذف"; }, 3000); return; }
+    update(FILES.income, (arr) => { const i = arr.findIndex((y) => y.id === id); if (i >= 0) arr.splice(i, 1); }, "حذف دخل");
+    render();
   } else if (t.dataset.delmeet || t.dataset.delnote) {
     if (!t.classList.contains("arm")) { t.classList.add("arm"); t.textContent = "متأكدة؟"; setTimeout(() => { t.classList.remove("arm"); t.textContent = "حذف"; }, 3000); return; }
     if (t.dataset.delmeet) update(FILES.meetings, (m) => { const i = m.findIndex((x) => x.id === t.dataset.delmeet); if (i >= 0) m.splice(i, 1); }, "حذف اجتماع");
@@ -281,6 +305,14 @@ $("expForm").addEventListener("submit", (e) => {
   if (!x.name || !(x.amount >= 0)) return;
   update(FILES.expenses, (arr) => { if (!arr.find((y) => y.id === x.id)) arr.push(x); }, "مصروف جديد");
   e.target.reset(); $("eDate").value = today(); toast("انحفظ المصروف 💳"); render();
+});
+$("iSrc").innerHTML = P.INC_SOURCES.map((c) => `<option>${c}</option>`).join("");
+$("incForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const x = { id: "i" + Date.now(), amount: Number($("iAmount").value), currency: $("iCur").value, source: $("iSrc").value, date: $("iDate").value, note: $("iNote").value.trim() };
+  if (!(x.amount > 0)) return;
+  update(FILES.income, (arr) => { if (!arr.find((y) => y.id === x.id)) arr.push(x); }, "دخل جديد");
+  e.target.reset(); $("iDate").value = today(); toast("مبروك 💰 انحفظ الدخل"); render();
 });
 $("noteForm").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -338,7 +370,7 @@ async function boot() {
     try { D.research = (await readFile("research/latest.json")).data; } catch { D.research = null; } // optional, written by the weekly research
     D.roadmap ||= { tasks: [] };
     setSync(LOCAL ? "تجربة محلية" : "محفوظ ✓");
-    $("mDate").value = today(); if (!$("eDate").value) $("eDate").value = today();
+    $("mDate").value = today(); if (!$("eDate").value) $("eDate").value = today(); if (!$("iDate").value) $("iDate").value = today();
     render();
     let tab = "today"; try { tab = localStorage.getItem("futureme.tab") || "today"; } catch {}
     document.querySelector(`.tabs button[data-v="${tab}"]`)?.click();

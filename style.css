@@ -145,3 +145,20 @@ select{color:var(--fg);border-radius:12px;padding:10px 12px;font-size:15px;width
 .ms.big b{font-family:var(--display);font-size:28px;color:var(--gold)}
 .item .acts{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
 .tabs button{font-size:10.5px}
+.ms.wide{grid-column:1/-1}
+.ms .pos,.pos{color:var(--mint)}
+.ms.big.neg b,.negc{color:var(--coral)}
+.year{display:flex;flex-direction:column;gap:10px}
+.seg{display:flex;gap:4px;background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:3px}
+.seg button{all:unset;cursor:pointer;font-size:12.5px;padding:3px 12px;border-radius:99px;color:var(--muted)}
+.seg button.on{background:var(--em);color:#fff}
+.tbl-wrap{overflow-x:auto}
+#yearTbl{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+#yearTbl th{color:var(--dim);font-weight:500;text-align:start;padding:6px 4px;border-bottom:1px solid var(--line)}
+#yearTbl td{padding:7px 4px;border-bottom:1px solid rgba(23,64,63,.5)}
+#yearTbl tr.future td{color:var(--dim)}
+#yearTbl tr.now td{background:rgba(227,194,126,.07)}
+#yearTbl tr.now td:first-child{color:var(--gold);font-weight:700}
+#yearTbl tfoot td{font-weight:800;border-top:1px solid var(--line);border-bottom:0}
+.form-wrap summary{cursor:pointer;font-weight:700;font-size:15px}
+.form-wrap[open] summary{margin-bottom:10px}

@@ -90,9 +90,30 @@
     <!-- MONEY -->
     <section class="view" id="v-money" hidden>
       <div class="money-sum" id="moneySum"></div>
+      <div class="card year">
+        <div class="row"><b>شهر بشهر</b><div class="seg" id="yearSeg"></div></div>
+        <div class="tbl-wrap"><table id="yearTbl"></table></div>
+      </div>
+      <details class="card form-wrap">
+        <summary>💰 أضيفي دخل</summary>
+        <form class="form" id="incForm" autocomplete="off">
+          <div class="two">
+            <label>المبلغ<input type="number" id="iAmount" inputmode="decimal" step="0.01" min="0" required></label>
+            <label>العملة<select id="iCur"><option value="SAR">ريال</option><option value="USD">دولار</option></select></label>
+          </div>
+          <div class="two">
+            <label>من وين؟<select id="iSrc"></select></label>
+            <label>التاريخ<input type="date" id="iDate" required></label>
+          </div>
+          <label>ملاحظة (اختياري)<input type="text" id="iNote" placeholder="مثلاً: دفعة C15، عميل خطوة خضراء"></label>
+          <button class="btn" type="submit">احفظي الدخل</button>
+        </form>
+      </details>
+      <div id="incList"></div>
       <div id="moneyCats"></div>
-      <form class="card form" id="expForm" autocomplete="off">
-        <b>مصروف جديد للشغل</b>
+      <details class="card form-wrap">
+      <summary>💳 أضيفي مصروف للشغل</summary>
+      <form class="form" id="expForm" autocomplete="off">
         <label>إيش هو؟<input type="text" id="eName" placeholder="مثلاً: Thinkific، ChatGPT Plus، Canva" required></label>
         <div class="two">
           <label>المبلغ<input type="number" id="eAmount" inputmode="decimal" step="0.01" min="0" required></label>
@@ -106,6 +127,7 @@
         <button class="btn" type="submit">احفظي المصروف</button>
         <small class="hint">الاشتراك ينحسب كل شهر لحاله لين تضغطين «ألغيته». الدولار ينحسب ٣٫٧٥ ريال.</small>
       </form>
+      </details>
       <div id="expList"></div>
     </section>
 
@@ -127,7 +149,7 @@
     <button data-v="journey"><span>🌱</span>رحلتي</button>
     <button data-v="goals"><span>🎯</span>أهدافي</button>
     <button data-v="meet"><span>📅</span>مواعيدي</button>
-    <button data-v="money"><span>💳</span>مصاريف</button>
+    <button data-v="money"><span>💰</span>فلوسي</button>
     <button data-v="notes"><span>📝</span>نوت</button>
   </nav>
 </div>

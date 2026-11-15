@@ -218,6 +218,23 @@ export function renewalsOn(date, expenses) {
   });
 }
 
+/* ---- business income ---- */
+export const INC_SOURCES = ["المعسكر", "عملاء الداشبورد", "منتجات رقمية", "تعاون وإعلانات", "أخرى"];
+export function incomeInMonth(income, month) {
+  let total = 0; const bySource = {};
+  for (const x of income || []) if ((x.date || "").slice(0, 7) === month) { const v = toSAR(x); total += v; bySource[x.source || "أخرى"] = (bySource[x.source || "أخرى"] || 0) + v; }
+  return { total, bySource };
+}
+/** One row per month of the year: income, expenses, net. */
+export function yearTable(year, income, expenses) {
+  return Array.from({ length: 12 }, (_, i) => {
+    const month = `${year}-${String(i + 1).padStart(2, "0")}`;
+    const inc = incomeInMonth(income, month).total, exp = spentInMonth(expenses, month).total;
+    return { month, income: inc, expenses: exp, net: inc - exp };
+  });
+}
+export const MONTH_NAMES = MONTHS;
+
 export function nextCheckpoint(date, profile) {
   return (profile.checkpoints || []).find((c) => c >= date) || null;
 }
