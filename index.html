@@ -87,6 +87,28 @@
       <div id="meetList"></div>
     </section>
 
+    <!-- MONEY -->
+    <section class="view" id="v-money" hidden>
+      <div class="money-sum" id="moneySum"></div>
+      <div id="moneyCats"></div>
+      <form class="card form" id="expForm" autocomplete="off">
+        <b>مصروف جديد للشغل</b>
+        <label>إيش هو؟<input type="text" id="eName" placeholder="مثلاً: Thinkific، ChatGPT Plus، Canva" required></label>
+        <div class="two">
+          <label>المبلغ<input type="number" id="eAmount" inputmode="decimal" step="0.01" min="0" required></label>
+          <label>العملة<select id="eCur"><option value="SAR">ريال</option><option value="USD">دولار</option></select></label>
+        </div>
+        <div class="two">
+          <label>النوع<select id="eKind"><option value="monthly">اشتراك شهري</option><option value="yearly">اشتراك سنوي</option><option value="once">دفعة مرة وحدة</option></select></label>
+          <label>التاريخ<input type="date" id="eDate" required></label>
+        </div>
+        <label>التصنيف<select id="eCat"></select></label>
+        <button class="btn" type="submit">احفظي المصروف</button>
+        <small class="hint">الاشتراك ينحسب كل شهر لحاله لين تضغطين «ألغيته». الدولار ينحسب ٣٫٧٥ ريال.</small>
+      </form>
+      <div id="expList"></div>
+    </section>
+
     <!-- NOTES -->
     <section class="view" id="v-notes" hidden>
       <div id="research"></div>
@@ -105,6 +127,7 @@
     <button data-v="journey"><span>🌱</span>رحلتي</button>
     <button data-v="goals"><span>🎯</span>أهدافي</button>
     <button data-v="meet"><span>📅</span>مواعيدي</button>
+    <button data-v="money"><span>💳</span>مصاريف</button>
     <button data-v="notes"><span>📝</span>نوت</button>
   </nav>
 </div>

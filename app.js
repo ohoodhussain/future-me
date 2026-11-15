@@ -57,7 +57,7 @@ function update(path, mutate, message) {
 }
 
 const FILES = { profile: "profile.json", roadmap: "roadmap.json", habits: "habits.json", goals: "goals.json", state: "state.json",
-  notes: "notes.json", meetings: "meetings.json", motivation: "motivation.json", items: "items.json" };
+  notes: "notes.json", meetings: "meetings.json", motivation: "motivation.json", items: "items.json", expenses: "expenses.json" };
 const KEY = Object.fromEntries(Object.entries(FILES).map(([k, v]) => [v, k]));
 const D = {};
 
@@ -153,6 +153,7 @@ function render() {
   if (stage > (state.seen_stage || 1)) showReveal(stage);
 
   renderGoals(date, state);
+  renderMoney(date);
   renderMeetings(date);
   renderNotes();
 }
@@ -173,6 +174,23 @@ function renderGoals(date, state) {
     const cur = P.autoGoalValue(g, state), pct = g.target && cur != null ? Math.min(100, (cur / g.target) * 100) : null;
     return `<button class="goal" data-goal="${g.id}"><div class="row"><span>${esc(g.name)}</span><em>${P.arNum(cur)} / ${P.arNum(g.target)} ${esc(g.unit)}</em></div>
       <div class="bar ${pct == null ? "empty" : ""}"><i style="width:${pct ?? 0}%"></i></div></button>`; }).join("")}</div>`).join("");
+}
+
+const SAR = (n) => `${P.arNum(Math.round(n))} ريال`;
+const KIND = { monthly: "شهري", yearly: "سنوي", once: "مرة وحدة" };
+function renderMoney(date) {
+  const ex = D.expenses || [], month = date.slice(0, 7), year = date.slice(0, 4);
+  const m = P.spentInMonth(ex, month), run = P.monthlyRunRate(ex, month), y = P.spentInYear(ex, year, month);
+  $("moneySum").innerHTML = `
+    <div class="ms big"><span>صرفتي على الشغل هذا الشهر</span><b>${SAR(m.total)}</b></div>
+    <div class="ms"><span>اشتراكاتك تكلفك شهرياً</span><b>${SAR(run)}</b></div>
+    <div class="ms"><span>من بداية ${P.ar(year)}</span><b>${SAR(y)}</b></div>`;
+  const cats = Object.entries(m.byCat).sort((a, b) => b[1] - a[1]);
+  $("moneyCats").innerHTML = cats.length ? `<div class="grp"><b>وين راحت فلوس الشهر؟</b>${cats.map(([c, v]) => `<div class="g"><div class="row"><span>${esc(c)}</span><em>${SAR(v)}</em></div><div class="bar"><i style="width:${(v / m.total) * 100}%"></i></div></div>`).join("")}</div>` : "";
+  const act = ex.filter((e) => e.kind !== "once" && !e.end), done = ex.filter((e) => e.kind === "once" || e.end).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const row = (e) => `<div class="item"><div class="txt"><b>${esc(e.name)}</b> · ${P.arNum(e.amount)} ${e.currency === "USD" ? "دولار" : "ريال"}<small>${KIND[e.kind]} · ${esc(e.category || "")} · ${esc(e.date)}${e.end ? ` · ألغيته ${esc(e.end)}` : ""}</small></div>
+    <div class="acts">${e.kind !== "once" && !e.end ? `<button class="del" data-cancelexp="${esc(e.id)}">ألغيته</button>` : ""}<button class="del" data-delexp="${esc(e.id)}">حذف</button></div></div>`;
+  $("expList").innerHTML = `<div class="list">${act.length ? `<div class="day-h">اشتراكاتك الحالية</div>${act.map(row).join("")}` : ""}${done.length ? `<div class="day-h">دفعات ومنتهية</div>${done.map(row).join("")}` : ""}${ex.length ? "" : `<p class="empty-note">لسه ما أضفتي مصاريف. ابدئي باشتراكاتك: المنصة، الأدوات، والبرامج.</p>`}</div>`;
 }
 
 function renderMeetings(date) {
@@ -231,6 +249,16 @@ document.addEventListener("click", (e) => {
     window.scrollTo(0, 0);
   } else if (t.dataset.goal) {
     editGoal(t.dataset.goal);
+  } else if (t.dataset.cancelexp) {
+    const id = t.dataset.cancelexp;
+    if (!t.classList.contains("arm")) { t.classList.add("arm"); t.textContent = "متأكدة؟"; setTimeout(() => { t.classList.remove("arm"); t.textContent = "ألغيته"; }, 3000); return; }
+    update(FILES.expenses, (arr) => { const x = arr.find((y) => y.id === id); if (x) x.end = date; }, "إلغاء اشتراك");
+    toast("سجلت إلغاء الاشتراك ✂️"); render();
+  } else if (t.dataset.delexp) {
+    const id = t.dataset.delexp;
+    if (!t.classList.contains("arm")) { t.classList.add("arm"); t.textContent = "متأكدة؟"; setTimeout(() => { t.classList.remove("arm"); t.textContent = "حذف"; }, 3000); return; }
+    update(FILES.expenses, (arr) => { const i = arr.findIndex((y) => y.id === id); if (i >= 0) arr.splice(i, 1); }, "حذف مصروف");
+    render();
   } else if (t.dataset.delmeet || t.dataset.delnote) {
     if (!t.classList.contains("arm")) { t.classList.add("arm"); t.textContent = "متأكدة؟"; setTimeout(() => { t.classList.remove("arm"); t.textContent = "حذف"; }, 3000); return; }
     if (t.dataset.delmeet) update(FILES.meetings, (m) => { const i = m.findIndex((x) => x.id === t.dataset.delmeet); if (i >= 0) m.splice(i, 1); }, "حذف اجتماع");
@@ -244,6 +272,15 @@ $("meetForm").addEventListener("submit", (e) => {
   const m = { id: "m" + Date.now(), date: $("mDate").value, time: $("mTime").value, with: $("mWith").value.trim(), topic: $("mTopic").value.trim() };
   update(FILES.meetings, (arr) => { if (!arr.find((x) => x.id === m.id)) arr.push(m); }, "اجتماع جديد");
   e.target.reset(); $("mDate").value = today(); toast("انحفظ الاجتماع 📅 بيوصلك تذكير"); render();
+});
+$("eCat").innerHTML = P.EXP_CATS.map((c) => `<option>${c}</option>`).join("");
+$("expForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const x = { id: "e" + Date.now(), name: $("eName").value.trim(), amount: Number($("eAmount").value), currency: $("eCur").value,
+    kind: $("eKind").value, date: $("eDate").value, category: $("eCat").value, end: null };
+  if (!x.name || !(x.amount >= 0)) return;
+  update(FILES.expenses, (arr) => { if (!arr.find((y) => y.id === x.id)) arr.push(x); }, "مصروف جديد");
+  e.target.reset(); $("eDate").value = today(); toast("انحفظ المصروف 💳"); render();
 });
 $("noteForm").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -301,7 +338,7 @@ async function boot() {
     try { D.research = (await readFile("research/latest.json")).data; } catch { D.research = null; } // optional, written by the weekly research
     D.roadmap ||= { tasks: [] };
     setSync(LOCAL ? "تجربة محلية" : "محفوظ ✓");
-    $("mDate").value = today();
+    $("mDate").value = today(); if (!$("eDate").value) $("eDate").value = today();
     render();
     let tab = "today"; try { tab = localStorage.getItem("futureme.tab") || "today"; } catch {}
     document.querySelector(`.tabs button[data-v="${tab}"]`)?.click();

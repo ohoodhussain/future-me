@@ -182,6 +182,42 @@ export function meetingsOn(date, meetings) {
   return (meetings || []).filter((m) => m.date === date).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
 }
 
+/* ---- work expenses ---- */
+export const USD_RATE = 3.75;
+export const EXP_CATS = ["منصات", "اشتراكات وأدوات", "إعلانات", "أجهزة ومعدات", "تعليم وكورسات", "أخرى"];
+export const toSAR = (e) => Number(e.amount || 0) * (e.currency === "USD" ? USD_RATE : 1);
+const ym = (d) => d.slice(0, 7);
+function activeIn(e, month) { return ym(e.date) <= month && (!e.end || ym(e.end) >= month); }
+/** What she pays in a given month (YYYY-MM): monthly subs, yearly subs renewing that month, one-time payments that month. */
+export function spentInMonth(expenses, month) {
+  let total = 0; const byCat = {};
+  for (const e of expenses || []) {
+    let v = 0;
+    if (e.kind === "monthly" && activeIn(e, month)) v = toSAR(e);
+    else if (e.kind === "yearly" && activeIn(e, month) && e.date.slice(5, 7) === month.slice(5, 7)) v = toSAR(e);
+    else if (e.kind === "once" && ym(e.date) === month) v = toSAR(e);
+    if (v) { total += v; byCat[e.category || "أخرى"] = (byCat[e.category || "أخرى"] || 0) + v; }
+  }
+  return { total, byCat };
+}
+/** Average monthly cost of the subscriptions she has right now (yearly ÷ 12). */
+export function monthlyRunRate(expenses, month) {
+  return (expenses || []).filter((e) => e.kind !== "once" && activeIn(e, month)).reduce((s, e) => s + (e.kind === "yearly" ? toSAR(e) / 12 : toSAR(e)), 0);
+}
+export function spentInYear(expenses, year, uptoMonth) {
+  let t = 0;
+  for (let m = 1; m <= 12; m++) { const mm = `${year}-${String(m).padStart(2, "0")}`; if (uptoMonth && mm > uptoMonth) break; t += spentInMonth(expenses, mm).total; }
+  return t;
+}
+/** Subscriptions that renew on the given date. */
+export function renewalsOn(date, expenses) {
+  return (expenses || []).filter((e) => {
+    if (e.kind === "once" || !activeIn(e, ym(date)) || e.date >= date) return false;
+    if (e.kind === "monthly") return Number(e.date.slice(8, 10)) === Number(date.slice(8, 10));
+    return e.date.slice(5, 10) === date.slice(5, 10);
+  });
+}
+
 export function nextCheckpoint(date, profile) {
   return (profile.checkpoints || []).find((c) => c >= date) || null;
 }
