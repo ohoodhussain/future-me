@@ -119,9 +119,18 @@ function render() {
         <div class="meta"><span>⏱️ ${P.ar(s.minutes || 30)} د</span><span>+${P.ar(P.taskXP(s))} نقطة</span>${s.done ? "" : `<button class="later" data-later="${esc(s.id)}">أأجلها لبكرة</button>`}</div></div>
     </div>`).join("") : `<p class="empty-note">${plan.type === "weekend" ? "اليوم لك ولعائلتك 🤍 استمتعي." : "خلصتي كل خطوات الخطة 🎉 قولي لـClaude يضيف لك خطوات جديدة."}</p>`;
 
+  const content = P.contentFor(date, profile, state);
+  $("posts").innerHTML = content.filter((c) => c.kind === "post").map((c) => `<button class="habit ${c.done ? "on" : ""}" data-content="${c.id}" aria-pressed="${c.done}">${c.emoji} ${esc(c.title)}</button>`).join("");
+  $("contentSteps").innerHTML = content.filter((c) => c.kind !== "post").map((s) => `
+    <div class="step ${s.done ? "done" : ""}">
+      <button class="box" data-content="${esc(s.id)}" aria-pressed="${s.done}" aria-label="تم: ${esc(s.title)}">✓</button>
+      <div><span class="slot">${s.optional ? "اختياري" : s.kind === "yt" ? "يوتيوب الأسبوع" : "تجهيز"}</span><span class="t">${esc(s.title)}</span>${s.detail ? `<span class="d">${esc(s.detail)}</span>` : ""}
+        <div class="meta"><span>⏱️ ${P.ar(s.minutes || 30)} د</span><span>+${P.ar(s.xp)} نقطة</span></div></div>
+    </div>`).join("");
   $("habits").innerHTML = habits.map((h) => `<button class="habit ${td.habits.includes(h.id) ? "on" : ""}" data-habit="${h.id}" aria-pressed="${td.habits.includes(h.id)}">${h.emoji} ${esc(h.name)}</button>`).join("");
   const doneSteps = plan.steps.filter((s) => s.done).length;
-  $("evening").textContent = `اليوم: ${P.ar(doneSteps)} من ${P.ar(plan.steps.length)} خطوات · ${P.ar(td.habits.length)} عادات`;
+  const postsDone = content.filter((c) => c.kind === "post" && c.done).length, postsAll = content.filter((c) => c.kind === "post").length;
+  $("evening").textContent = `اليوم: ${P.ar(doneSteps)} من ${P.ar(plan.steps.length)} خطوات · ${P.ar(postsDone)} من ${P.ar(postsAll)} منشورات · ${P.ar(td.habits.length)} عادات`;
 
   // journey
   const img = $("stageImg");
@@ -206,6 +215,11 @@ document.addEventListener("click", (e) => {
     const id = t.dataset.later;
     update(FILES.state, (s) => { const d = dayOf(s, date); d.skipped ||= []; if (!d.skipped.includes(id)) d.skipped.push(id); }, `تأجيل: ${id}`);
     toast("أجلناها لبكرة، ولا يهمك 🤍"); render();
+  } else if (t.dataset.content) {
+    const id = t.dataset.content;
+    update(FILES.state, (s) => { const d = dayOf(s, date); d.content ||= []; const i = d.content.indexOf(id); i >= 0 ? d.content.splice(i, 1) : d.content.push(id); }, `محتوى: ${id}`);
+    if ((dayOf(D.state, date).content || []).includes(id)) toast(id.startsWith("yt") ? "خطوة يوتيوب ✓ 🎥" : id === "prep" ? "مقاطع بكرة جاهزة 🎬" : "انشر ✓ 🚀");
+    render();
   } else if (t.dataset.habit) {
     const id = t.dataset.habit;
     update(FILES.state, (s) => { const d = dayOf(s, date); const i = d.habits.indexOf(id); i >= 0 ? d.habits.splice(i, 1) : d.habits.push(id); }, `عادة: ${id}`);

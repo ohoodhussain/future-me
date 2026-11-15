@@ -94,6 +94,26 @@ export function planFor(date, data) {
 
 export function taskXP(t) { return t && t.kind === "light" ? 30 : 60; }
 
+/* ---- daily content track: posts every day, prep for tomorrow, YouTube pipeline by weekday ---- */
+export function contentXP(id) {
+  if (id === "prep") return 30;
+  if (id === "yt2") return 60;
+  if (id.startsWith("yt-")) return 40;
+  return 10; // one post
+}
+export function contentKind(id) { return id === "prep" ? "prep" : id.startsWith("yt") ? id : "post"; }
+export function contentFor(date, profile, state) {
+  const c = profile.content; if (!c) return [];
+  const wd = weekday(date);
+  const done = new Set(dayEntry(state, date).content || []);
+  const out = (c.posts || []).map((p) => ({ id: p.id, title: p.name, emoji: p.emoji, kind: "post" }));
+  if (c.prep) out.push({ id: "prep", title: c.prep.name, detail: c.prep.detail, minutes: c.prep.minutes, kind: "prep" });
+  const y = c.youtube_pipeline && c.youtube_pipeline[String(wd)];
+  if (y) out.push({ id: `yt-${wd}`, title: y.title, detail: y.detail, minutes: y.minutes, kind: "yt" });
+  if (wd === 6 && c.youtube_second) out.push({ id: "yt2", title: c.youtube_second.title, detail: c.youtube_second.detail, minutes: c.youtube_second.minutes, kind: "yt", optional: true });
+  return out.map((x) => ({ ...x, xp: contentXP(x.id), done: done.has(x.id) }));
+}
+
 export function totalXP(state, roadmap) {
   const all = expandRoadmap(roadmap);
   const byId = Object.fromEntries(all.map((t) => [t.id, t]));
@@ -101,6 +121,7 @@ export function totalXP(state, roadmap) {
   for (const e of Object.values(state.days || {})) {
     for (const id of e.tasks || []) xp += taskXP(byId[id]);
     xp += (e.habits || []).length * HABIT_XP;
+    for (const id of e.content || []) xp += contentXP(id);
   }
   return xp;
 }
@@ -108,7 +129,7 @@ export function levelOf(xp) { return Math.min(MAX_LEVEL, Math.floor(xp / XP_PER_
 export function stageOf(level) { let s = 1; STAGES.forEach((l, i) => { if (level >= l) s = i + 1; }); return s; }
 export function nextStageIn(level) { const n = STAGES.find((l) => l > level); return n ? n - level : null; }
 
-function activeDay(e) { return (e.tasks || []).length > 0 || (e.habits || []).length >= 3; }
+function activeDay(e) { return (e.tasks || []).length > 0 || (e.habits || []).length >= 3 || (e.content || []).length >= 2; }
 export function streak(state, today) {
   let d = today, n = 0;
   if (!activeDay(dayEntry(state, d))) d = addDays(d, -1); // today not finished yet: count from yesterday
@@ -119,13 +140,14 @@ export function streak(state, today) {
 export function counters(state, roadmap, notes) {
   const all = expandRoadmap(roadmap);
   const byId = Object.fromEntries(all.map((t) => [t.id, t]));
-  const habit = {}, goal = {};
+  const habit = {}, goal = {}, content = {};
   let tasks = 0;
   for (const e of Object.values(state.days || {})) {
     (e.habits || []).forEach((h) => (habit[h] = (habit[h] || 0) + 1));
+    (e.content || []).forEach((id) => { const k = contentKind(id); content[k] = (content[k] || 0) + 1; });
     (e.tasks || []).forEach((id) => { tasks++; const g = byId[id] && byId[id].goal; if (g) goal[g] = (goal[g] || 0) + 1; });
   }
-  return { habit, goal, tasks, notes: (notes || []).length };
+  return { habit, goal, content, tasks, notes: (notes || []).length };
 }
 
 export function earnedItems(items, ctx) {
@@ -138,6 +160,7 @@ export function earnedItems(items, ctx) {
     if (w.streak) return streakNow >= w.streak;
     if (w.level) return level >= w.level;
     if (w.notes) return c.notes >= w.notes;
+    if (w.content) return ((c.content || {})[w.content] || 0) >= w.count;
     return false;
   });
 }
