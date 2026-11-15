@@ -1,0 +1,164 @@
+// Future Me planner: shared by the phone app and the Telegram bot.
+// Pure functions, no DOM, no network.
+
+export const XP_PER_LEVEL = 100;
+export const MAX_LEVEL = 365;
+export const HABIT_XP = 10;
+export const STAGES = [1, 21, 61, 121, 221, 301]; // first level of each stage (hidden from the UI)
+
+const AR = "٠١٢٣٤٥٦٧٨٩";
+export const ar = (n) => String(n).replace(/\d/g, (d) => AR[d]);
+export const arNum = (n) => (n == null ? "؟" : ar(Number(n).toLocaleString("en-US")).replace(/,/g, "٬"));
+
+export function localDate(offsetHours = 3, d = new Date()) {
+  return new Date(d.getTime() + offsetHours * 3600e3).toISOString().slice(0, 10);
+}
+export function localHM(offsetHours = 3, d = new Date()) {
+  const t = new Date(d.getTime() + offsetHours * 3600e3);
+  return t.getUTCHours() * 60 + t.getUTCMinutes();
+}
+export function addDays(date, n) {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+export function weekday(date) { return new Date(date + "T00:00:00Z").getUTCDay(); } // 0=Sun
+
+const WEEKDAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+const MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+export function dateLabel(date) {
+  const d = new Date(date + "T00:00:00Z");
+  return `${WEEKDAYS[d.getUTCDay()]} ${ar(d.getUTCDate())} ${MONTHS[d.getUTCMonth()]}`;
+}
+
+export function dayType(date, profile) {
+  if ((profile.weekend_days || [5, 6]).includes(weekday(date))) return "weekend";
+  if (profile.leave_end && date <= profile.leave_end) return "leave";
+  return "work";
+}
+export const DAY_LABEL = { leave: "يوم إجازة · ٧ص–٤م لك", work: "يوم دوام · الساعة الذهبية", weekend: "ويكند · وقت العائلة" };
+
+export function expandRoadmap(roadmap) {
+  const out = [];
+  for (const t of roadmap.tasks || []) {
+    if (t.repeat) {
+      const start = t.start || 1;
+      for (let i = 0; i < t.repeat; i++) {
+        const n = start + i;
+        out.push({ ...t, id: `${t.id}-${n}`, base: t.id, n, title: t.title.replace("{n}", ar(n)) });
+      }
+    } else out.push({ ...t, base: t.id });
+  }
+  return out;
+}
+
+function dayEntry(state, date) { return (state.days && state.days[date]) || { tasks: [], habits: [], skipped: [] }; }
+
+export function doneTaskSet(state, beforeDate) {
+  const s = new Set();
+  for (const [d, e] of Object.entries(state.days || {})) {
+    if (beforeDate && d >= beforeDate) continue;
+    (e.tasks || []).forEach((id) => s.add(id));
+  }
+  return s;
+}
+
+/** Today's plan: the next undone tasks in roadmap order. Stable during the day. */
+export function planFor(date, data) {
+  const { profile, roadmap, state } = data;
+  const type = dayType(date, profile);
+  const count = (profile.steps_per_day || {})[type] ?? 1;
+  const slots = (profile.slots || {})[type] || [];
+  const doneBefore = doneTaskSet(state, date);
+  const today = dayEntry(state, date);
+  const skipped = new Set(today.skipped || []);
+  let pool = expandRoadmap(roadmap).filter((t) => !doneBefore.has(t.id) && !skipped.has(t.id));
+  if (type === "weekend") {
+    const light = pool.slice(0, 6).find((t) => t.kind === "light");
+    pool = light ? [light] : [];
+  } else if (type === "work") {
+    // the golden hour fits one step; prefer the next task that fits in ~60 minutes
+    const fit = pool.slice(0, 4).find((t) => (t.minutes || 60) <= 60);
+    if (fit) pool = [fit, ...pool.filter((t) => t !== fit)];
+  }
+  const steps = pool.slice(0, count).map((t, i) => ({ ...t, slot: slots[i] || slots[slots.length - 1] || "", done: (today.tasks || []).includes(t.id) }));
+  // also show tasks she finished today that are no longer at the front
+  for (const id of today.tasks || []) {
+    if (!steps.find((s) => s.id === id)) {
+      const t = expandRoadmap(roadmap).find((x) => x.id === id);
+      if (t) steps.push({ ...t, slot: "إضافي", done: true });
+    }
+  }
+  return { date, type, label: DAY_LABEL[type], steps };
+}
+
+export function taskXP(t) { return t && t.kind === "light" ? 30 : 60; }
+
+export function totalXP(state, roadmap) {
+  const all = expandRoadmap(roadmap);
+  const byId = Object.fromEntries(all.map((t) => [t.id, t]));
+  let xp = 0;
+  for (const e of Object.values(state.days || {})) {
+    for (const id of e.tasks || []) xp += taskXP(byId[id]);
+    xp += (e.habits || []).length * HABIT_XP;
+  }
+  return xp;
+}
+export function levelOf(xp) { return Math.min(MAX_LEVEL, Math.floor(xp / XP_PER_LEVEL) + 1); }
+export function stageOf(level) { let s = 1; STAGES.forEach((l, i) => { if (level >= l) s = i + 1; }); return s; }
+export function nextStageIn(level) { const n = STAGES.find((l) => l > level); return n ? n - level : null; }
+
+function activeDay(e) { return (e.tasks || []).length > 0 || (e.habits || []).length >= 3; }
+export function streak(state, today) {
+  let d = today, n = 0;
+  if (!activeDay(dayEntry(state, d))) d = addDays(d, -1); // today not finished yet: count from yesterday
+  while (activeDay(dayEntry(state, d))) { n++; d = addDays(d, -1); }
+  return n;
+}
+
+export function counters(state, roadmap, notes) {
+  const all = expandRoadmap(roadmap);
+  const byId = Object.fromEntries(all.map((t) => [t.id, t]));
+  const habit = {}, goal = {};
+  let tasks = 0;
+  for (const e of Object.values(state.days || {})) {
+    (e.habits || []).forEach((h) => (habit[h] = (habit[h] || 0) + 1));
+    (e.tasks || []).forEach((id) => { tasks++; const g = byId[id] && byId[id].goal; if (g) goal[g] = (goal[g] || 0) + 1; });
+  }
+  return { habit, goal, tasks, notes: (notes || []).length };
+}
+
+export function earnedItems(items, ctx) {
+  const { c, level, streakNow } = ctx;
+  return items.filter((it) => {
+    const w = it.when;
+    if (w.tasks) return c.tasks >= w.tasks;
+    if (w.habit) return (c.habit[w.habit] || 0) >= w.count;
+    if (w.goal_tasks) return (c.goal[w.goal_tasks] || 0) >= w.count;
+    if (w.streak) return streakNow >= w.streak;
+    if (w.level) return level >= w.level;
+    if (w.notes) return c.notes >= w.notes;
+    return false;
+  });
+}
+
+export function autoGoalValue(goal, state) {
+  if (!goal.auto) return goal.current;
+  let n = 0;
+  doneTaskSet(state).forEach((id) => { if (id.startsWith(goal.auto + "-")) n++; });
+  return n;
+}
+
+export function motivationFor(date, list) {
+  if (!list || !list.length) return "";
+  const n = Math.floor(new Date(date + "T00:00:00Z").getTime() / 86400e3);
+  return list[n % list.length];
+}
+
+export function meetingsOn(date, meetings) {
+  return (meetings || []).filter((m) => m.date === date).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+}
+
+export function nextCheckpoint(date, profile) {
+  return (profile.checkpoints || []).find((c) => c >= date) || null;
+}

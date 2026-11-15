@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Future Me</title>
+<meta name="theme-color" content="#031017">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Future Me">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=El+Messiri:wght@500;600;700&family=Tajawal:wght@400;500;700;800&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div>
+      <div class="date" id="date">…</div>
+      <span class="chip" id="dayType"></span>
+    </div>
+    <div class="top-actions">
+      <span class="sync" id="sync" title="حالة الحفظ"></span>
+      <button class="icon-btn" id="openSettings" aria-label="الإعدادات">⚙︎</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- TODAY -->
+    <section class="view" id="v-today">
+      <div class="msg">
+        <div class="mini" id="miniPortrait"></div>
+        <p><span class="who">عهود المستقبلية</span><span id="motivation"></span></p>
+      </div>
+      <div class="lvl">
+        <div class="row"><b>المستوى <span id="lvN">١</span></b><span><span class="streak" id="streak">٠</span> يوم متتالي</span></div>
+        <div class="bar"><i id="xpBar"></i></div>
+        <div class="row small"><span id="xpT"></span><span id="surprise"></span></div>
+      </div>
+      <div id="todayMeetings"></div>
+      <h3 id="stepsTitle">خطوات اليوم</h3>
+      <div class="steps" id="steps"></div>
+      <h3>عاداتي</h3>
+      <div class="habits" id="habits"></div>
+      <p class="evening" id="evening"></p>
+    </section>
+
+    <!-- JOURNEY -->
+    <section class="view" id="v-journey" hidden>
+      <div class="portrait" id="portrait">
+        <img id="stageImg" alt="شخصيتك في رحلتك">
+        <div class="plant" id="plant"></div>
+        <div class="glow" id="glow"></div>
+      </div>
+      <div class="tier"><b>المستوى <span id="lvBig">١</span></b><span id="journeyLine"></span></div>
+      <div class="bar big"><i id="xpBar2"></i></div>
+      <h3>كنوزي <small id="treasureCount"></small></h3>
+      <div class="shelf" id="shelf"></div>
+      <p class="hint">كل عادة وكل خطوة تكسبك نقاط. فيه كنوز ومراحل مخفية… تكتشفينها بنفسك 🎁</p>
+    </section>
+
+    <!-- GOALS -->
+    <section class="view" id="v-goals" hidden>
+      <div class="check" id="checkpoint"></div>
+      <div id="goalGroups"></div>
+      <p class="hint">اضغطي على أي هدف عشان تحدثين رقمه.</p>
+    </section>
+
+    <!-- MEETINGS -->
+    <section class="view" id="v-meet" hidden>
+      <form class="card form" id="meetForm" autocomplete="off">
+        <b>اجتماع جديد</b>
+        <div class="two">
+          <label>التاريخ<input type="date" id="mDate" required></label>
+          <label>الوقت<input type="time" id="mTime" required></label>
+        </div>
+        <label>مع مين؟<input type="text" id="mWith" placeholder="مثلاً: سارة (1:1 الأسبوع ٢)" required></label>
+        <label>عن إيش؟ (اختياري)<input type="text" id="mTopic" placeholder="مراجعة مشروع الإكسل"></label>
+        <button class="btn" type="submit">احفظي الاجتماع</button>
+      </form>
+      <div id="meetList"></div>
+    </section>
+
+    <!-- NOTES -->
+    <section class="view" id="v-notes" hidden>
+      <form class="card form" id="noteForm">
+        <label for="noteText"><b>نوت جديدة</b></label>
+        <textarea id="noteText" rows="3" placeholder="فكرة فيديو، شيء تبين تتذكرينه، إحساس اليوم…" required></textarea>
+        <button class="btn" type="submit">احفظي</button>
+        <small class="hint">تقدرين كمان ترسلين أي رسالة للبوت في تيليجرام وتنحفظ هنا.</small>
+      </form>
+      <div id="noteList"></div>
+    </section>
+  </main>
+
+  <nav class="tabs" id="tabs">
+    <button data-v="today" class="on"><span>☀️</span>اليوم</button>
+    <button data-v="journey"><span>🌱</span>رحلتي</button>
+    <button data-v="goals"><span>🎯</span>أهدافي</button>
+    <button data-v="meet"><span>📅</span>مواعيدي</button>
+    <button data-v="notes"><span>📝</span>نوت</button>
+  </nav>
+</div>
+
+<!-- sheets -->
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <b id="sheetTitle"></b>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+<div class="reveal" id="reveal" hidden>
+  <div class="reveal-card">
+    <span class="sparkle">✨</span>
+    <b>مرحلة جديدة في رحلتك</b>
+    <img id="revealImg" alt="مرحلتك الجديدة">
+    <p id="revealText"></p>
+    <button class="btn" id="revealClose">يا الله 🤍</button>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
