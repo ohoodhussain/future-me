@@ -99,9 +99,16 @@ export function contentXP(id) {
   if (id === "prep") return 30;
   if (id === "yt2") return 60;
   if (id.startsWith("yt-")) return 40;
+  if (id.startsWith("lead:")) return 20; // contacted a potential client
   return 10; // one post
 }
-export function contentKind(id) { return id === "prep" ? "prep" : id.startsWith("yt") ? id : "post"; }
+export function contentKind(id) { return id === "prep" ? "prep" : id.startsWith("lead:") ? "lead" : id.startsWith("yt") ? id : "post"; }
+
+/* ---- potential clients (LinkedIn outreach) ---- */
+export const LEAD_STATUSES = ["جديد", "تواصلت", "رد", "اجتماع", "عرض سعر", "عميل", "مو مهتم"];
+export const LEAD_ACTIVE = ["تواصلت", "رد", "اجتماع", "عرض سعر"];
+export function leadsDue(date, leads) { return (leads || []).filter((l) => LEAD_ACTIVE.includes(l.status) && l.next_followup && l.next_followup <= date); }
+export function leadsNew(leads) { return (leads || []).filter((l) => (l.status || "جديد") === "جديد"); }
 export function contentFor(date, profile, state) {
   const c = profile.content; if (!c) return [];
   const wd = weekday(date);

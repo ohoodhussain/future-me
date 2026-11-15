@@ -57,7 +57,7 @@ function update(path, mutate, message) {
 }
 
 const FILES = { profile: "profile.json", roadmap: "roadmap.json", habits: "habits.json", goals: "goals.json", state: "state.json",
-  notes: "notes.json", meetings: "meetings.json", motivation: "motivation.json", items: "items.json", expenses: "expenses.json", income: "income.json" };
+  notes: "notes.json", meetings: "meetings.json", motivation: "motivation.json", items: "items.json", expenses: "expenses.json", income: "income.json", leads: "leads.json" };
 const KEY = Object.fromEntries(Object.entries(FILES).map(([k, v]) => [v, k]));
 const D = {};
 
@@ -154,6 +154,7 @@ function render() {
 
   renderGoals(date, state);
   renderMoney(date);
+  renderLeads(date);
   renderMeetings(date);
   renderNotes();
 }
@@ -276,6 +277,10 @@ document.addEventListener("click", (e) => {
     if (!t.classList.contains("arm")) { t.classList.add("arm"); t.textContent = "متأكدة؟"; setTimeout(() => { t.classList.remove("arm"); t.textContent = "حذف"; }, 3000); return; }
     update(FILES.expenses, (arr) => { const i = arr.findIndex((y) => y.id === id); if (i >= 0) arr.splice(i, 1); }, "حذف مصروف");
     render();
+  } else if (t.dataset.leadf) {
+    leadFilter = t.dataset.leadf; render();
+  } else if (t.dataset.lead) {
+    openLead(t.dataset.lead);
   } else if (t.dataset.year) {
     moneyYear = t.dataset.year; render();
   } else if (t.dataset.delinc) {
@@ -358,6 +363,78 @@ function settings(first) {
     $("cfgForm").onsubmit = (e) => { e.preventDefault(); cfg = { owner: $("cOwner").value.trim(), repo: $("cRepo").value.trim(), token: $("cTok").value.trim() }; saveCfg(cfg); $("sheet").hidden = true; boot(); };
   });
 }
+/* ---------------- potential clients ---------------- */
+let leadFilter = "todo";
+const LEAD_FILTERS = { todo: "اليوم", active: "متابعة", won: "عملاء", all: "الكل" };
+function leadsFor(filter, date) {
+  const L = D.leads || [];
+  if (filter === "todo") return [...P.leadsDue(date, L), ...P.leadsNew(L)];
+  if (filter === "active") return L.filter((l) => P.LEAD_ACTIVE.includes(l.status));
+  if (filter === "won") return L.filter((l) => l.status === "عميل");
+  return [...L].sort((a, b) => (b.added || "").localeCompare(a.added || ""));
+}
+function renderLeads(date) {
+  const L = D.leads || [];
+  const contacted = L.filter((l) => l.status && l.status !== "جديد").length;
+  $("leadCount").textContent = `تواصلتي مع ${P.ar(contacted)} من ${P.ar(L.length)}`;
+  $("leadSeg").innerHTML = Object.entries(LEAD_FILTERS).map(([k, v]) => `<button data-leadf="${k}" class="${k === leadFilter ? "on" : ""}">${v}</button>`).join("");
+  const list = leadsFor(leadFilter, date);
+  $("leadList").innerHTML = list.length ? `<div class="list">${list.map((l) => `<button class="lead" data-lead="${esc(l.id)}">
+      <span class="ls st-${P.LEAD_STATUSES.indexOf(l.status || "جديد")}">${esc(l.status || "جديد")}</span>
+      <b>${esc(l.company)}</b><small>${esc([l.sector, l.city].filter(Boolean).join(" · "))}${l.next_followup && P.LEAD_ACTIVE.includes(l.status) ? ` · متابعة ${esc(l.next_followup)}` : ""}</small>
+      ${l.why ? `<small class="why">${esc(l.why)}</small>` : ""}</button>`).join("")}</div>`
+    : `<p class="empty-note">${leadFilter === "todo" ? "ما فيه شي اليوم 🤍 كل سبت توصلك شركات جديدة." : "لسه ما فيه."}</p>`;
+  const dueList = P.leadsDue(date, L), due = dueList[0] || P.leadsNew(L)[0];
+  $("todayLeads").innerHTML = due ? `<button class="lead-today" data-lead="${esc(due.id)}"><span>🤝</span><div>${dueList.includes(due) ? "تابعي اليوم مع" : "تواصلي اليوم مع"} <b>${esc(due.company)}</b><small>اضغطي، والرسالة جاهزة تنسخينها</small></div></button>` : "";
+}
+function openLead(id) {
+  const date = today(), isNew = !id;
+  const l = isNew ? { id: "l" + Date.now(), company: "", status: "جديد", added: date, source: "manual" } : { ...(D.leads || []).find((x) => x.id === id) };
+  const li = `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(l.company || "")}`;
+  sheet(isNew ? "شركة جديدة" : l.company, `
+    ${isNew ? "" : `<p>${esc([l.sector, l.city].filter(Boolean).join(" · "))}</p>${l.why ? `<p class="why">💡 ${esc(l.why)}</p>` : ""}
+    <div class="links">${l.url ? `<a href="${esc(l.url)}" target="_blank" rel="noopener">🌐 الموقع</a>` : ""}<a href="${esc(l.linkedin || li)}" target="_blank" rel="noopener">💼 لينكدإن</a></div>
+    ${l.contact_role ? `<p>👤 تواصلي مع: ${esc(l.contact_role)}${l.contact_name ? " · " + esc(l.contact_name) : ""}</p>` : ""}`}
+    <form class="form" id="leadForm" autocomplete="off">
+      ${isNew ? `<label>اسم الشركة<input id="lCompany" required></label><label>القطاع<input id="lSector" placeholder="مطاعم، عيادات، متجر إلكتروني…"></label>` : ""}
+      <label>الرسالة (عدليها براحتك)<textarea id="lMsg" rows="6">${esc(l.message || "")}</textarea></label>
+      <button class="btn ghost" type="button" id="lCopy">📋 انسخي الرسالة</button>
+      <div class="two">
+        <label>الحالة<select id="lStatus">${P.LEAD_STATUSES.map((s) => `<option ${s === (l.status || "جديد") ? "selected" : ""}>${s}</option>`).join("")}</select></label>
+        <label>المتابعة الجاية<input type="date" id="lNext" value="${esc(l.next_followup || "")}"></label>
+      </div>
+      <label>ملاحظة<input id="lNote" value="${esc(l.note || "")}"></label>
+      <button class="btn" type="submit">احفظي</button>
+      ${isNew ? "" : `<button class="btn danger" type="button" id="lDel">احذفي الشركة</button>`}
+    </form>`, () => {
+    $("lCopy").onclick = () => {
+      const v = $("lMsg").value;
+      try { navigator.clipboard.writeText(v).then(() => toast("انسخت الرسالة 📋 الصقيها في لينكدإن"), () => { $("lMsg").select(); toast("حددتها لك، انسخيها"); }); }
+      catch { $("lMsg").select(); toast("حددتها لك، انسخيها"); }
+    };
+    if ($("lDel")) $("lDel").onclick = (e) => {
+      const b = e.target;
+      if (!b.classList.contains("arm")) { b.classList.add("arm"); b.textContent = "متأكدة؟ اضغطي مرة ثانية"; return; }
+      update(FILES.leads, (arr) => { const i = arr.findIndex((x) => x.id === l.id); if (i >= 0) arr.splice(i, 1); }, "حذف شركة");
+      $("sheet").hidden = true; render();
+    };
+    $("leadForm").onsubmit = (e) => {
+      e.preventDefault();
+      const status = $("lStatus").value, wasNew = (l.status || "جديد") === "جديد";
+      let next = $("lNext").value || null;
+      if (wasNew && status === "تواصلت" && !next) next = P.addDays(date, 5);
+      const patch = { message: $("lMsg").value, status, next_followup: next, note: $("lNote").value.trim() };
+      if (wasNew && status !== "جديد") patch.last_contact = date;
+      if (isNew) Object.assign(patch, { company: $("lCompany").value.trim(), sector: $("lSector").value.trim() });
+      update(FILES.leads, (arr) => { const x = arr.find((y) => y.id === l.id); if (x) Object.assign(x, patch); else arr.push({ ...l, ...patch }); }, `عميل محتمل: ${patch.company || l.company}`);
+      if (wasNew && status !== "جديد" && status !== "مو مهتم") update(FILES.state, (s) => { const d = dayOf(s, date); d.content ||= []; if (!d.content.includes("lead:" + l.id)) d.content.push("lead:" + l.id); }, "تواصل مع عميل");
+      $("sheet").hidden = true;
+      toast(status === "عميل" ? "مبروووك عميل جديد 🎉💰" : wasNew && status === "تواصلت" ? "برافو 🤝 +٢٠ نقطة، وبذكرك تتابعين بعد ٥ أيام" : "انحفظ ✓");
+      render();
+    };
+  });
+}
+$("addLead").onclick = () => openLead(null);
 $("openSettings").onclick = () => settings(false);
 
 /* ---------------- boot ---------------- */
