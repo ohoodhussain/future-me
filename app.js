@@ -111,13 +111,14 @@ function render() {
 
   // steps
   const td = dayOf(state, date);
-  $("stepsTitle").textContent = plan.type === "weekend" ? "خطوة خفيفة (اختيارية)" : "خطوات اليوم";
+  $("stepsTitle").textContent = plan.theme ? "خطوات اليوم" : plan.type === "weekend" ? "خطوة خفيفة (اختيارية)" : "خطوات اليوم";
   $("steps").innerHTML = plan.steps.length ? plan.steps.map((s) => `
     <div class="step ${s.done ? "done" : ""}">
       <button class="box" data-task="${esc(s.id)}" aria-pressed="${s.done}" aria-label="تم: ${esc(s.title)}">✓</button>
       <div><span class="slot">${esc(s.slot)}</span><span class="t">${esc(s.title)}</span>${s.detail ? `<span class="d">${esc(s.detail)}</span>` : ""}
         <div class="meta"><span>⏱️ ${P.ar(s.minutes || 30)} د</span><span>+${P.ar(P.taskXP(s))} نقطة</span>${s.done ? "" : `<button class="later" data-later="${esc(s.id)}">أأجلها لبكرة</button>`}</div></div>
-    </div>`).join("") : `<p class="empty-note">${plan.type === "weekend" ? "اليوم لك ولعائلتك 🤍 استمتعي." : "خلصتي كل خطوات الخطة 🎉 قولي لـClaude يضيف لك خطوات جديدة."}</p>`;
+    </div>`).join("") : (plan.theme ? "" : `<p class="empty-note">${plan.type === "weekend" ? "اليوم لك ولعائلتك 🤍 استمتعي." : "خلصتي كل خطوات الخطة 🎉 قولي لـClaude يضيف لك خطوات جديدة."}</p>`);
+  renderToday2(date, plan);
 
   const content = P.contentFor(date, profile, state);
   $("posts").innerHTML = content.filter((c) => c.kind === "post").map((c) => `<button class="habit ${c.done ? "on" : ""}" data-content="${c.id}" aria-pressed="${c.done}">${c.emoji} ${esc(c.title)}</button>`).join("");
@@ -153,6 +154,8 @@ function render() {
   if (stage > (state.seen_stage || 1)) showReveal(stage);
 
   renderGoals(date, state);
+  renderWeekPlan(date);
+  renderLearn(date);
   renderMoney(date);
   renderLeads(date);
   renderMeetings(date);
@@ -276,6 +279,13 @@ document.addEventListener("click", (e) => {
     const id = t.dataset.delexp;
     if (!t.classList.contains("arm")) { t.classList.add("arm"); t.textContent = "متأكدة؟"; setTimeout(() => { t.classList.remove("arm"); t.textContent = "حذف"; }, 3000); return; }
     update(FILES.expenses, (arr) => { const i = arr.findIndex((y) => y.id === id); if (i >= 0) arr.splice(i, 1); }, "حذف مصروف");
+    render();
+  } else if (t.dataset.act) {
+    ({ log: openLog, learn: openLearn, plan: openPlan })[t.dataset.act]?.();
+  } else if (t.dataset.dellog || t.dataset.dellearn) {
+    if (!t.classList.contains("arm")) { t.classList.add("arm"); t.textContent = "متأكدة؟"; setTimeout(() => { t.classList.remove("arm"); t.textContent = "حذف"; }, 3000); return; }
+    const key = t.dataset.dellog ? "log" : "learn", id = t.dataset.dellog || t.dataset.dellearn;
+    update(FILES.state, (s) => { const d = dayOf(s, date); d[key] = (d[key] || []).filter((x) => x.id !== id); }, "حذف");
     render();
   } else if (t.dataset.leadf) {
     leadFilter = t.dataset.leadf; render();
@@ -435,6 +445,86 @@ function openLead(id) {
   });
 }
 $("addLead").onclick = () => openLead(null);
+/* ---------------- ideal week: plan, quick log, learning ---------------- */
+const WD = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+function renderToday2(date, plan) {
+  const th = plan.theme;
+  const td = dayOf(D.state, date);
+  const tip = D.research && D.research.learn;
+  $("themeCard").innerHTML = th ? `<div class="theme-card t-${th.theme}">
+      <span class="te">${th.emoji}</span>
+      <div><small>هدف اليوم · يوم ${esc(th.name)}</small><b>${esc(plan.goalText)}</b>
+      ${th.theme === "learn" ? `${tip && tip.topic ? `<p class="tip">💡 اقتراح الأسبوع: ${esc(tip.topic)}</p>` : ""}<button class="btn" data-act="learn">📚 سجلي اللي تعلمتيه</button>` : ""}
+      ${th.theme === "production" && P.weekday(date) === 6 ? `<button class="btn ghost" data-act="plan">🗺️ خططي الأسبوع الجاي</button>` : ""}</div></div>` : "";
+  $("stepsTitle").hidden = !plan.steps.length;
+  const extra = [...(td.log || []).map((l) => `<div class="item done-log"><div class="txt">✍️ ${esc(l.text)}<small>+${P.ar(P.LOG_XP)} نقطة</small></div><button class="del" data-dellog="${esc(l.id)}">حذف</button></div>`),
+    ...(td.learn || []).map((l) => `<div class="item done-log"><div class="txt">📚 ${esc(l.text)}<small>${P.ar(l.min)} دقيقة · +${P.ar(P.learnXP(l.min))} نقطة</small></div><button class="del" data-dellearn="${esc(l.id)}">حذف</button></div>`)];
+  $("todayLog").innerHTML = extra.length ? `<div class="list">${extra.join("")}</div>` : "";
+}
+
+function renderWeekPlan(date) {
+  const sat = P.weekday(date) === 6, start = sat ? P.addDays(P.weekStart(date), 7) : P.weekStart(date), w = (D.state.weeks || {})[start] || null;
+  const rows = Array.from({ length: 7 }, (_, i) => {
+    const d = P.addDays(start, i), th = D.profile.week ? D.profile.week[String(i)] : null;
+    const txt = (w && w.days && w.days[d]) || (th ? th.goal : "");
+    return `<div class="wrow ${d === date ? "now" : ""} ${d < date ? "past" : ""}"><span>${th ? th.emoji : ""} ${WD[i]}</span><span>${esc(txt)}</span></div>`;
+  }).join("");
+  const top = w && (w.top || []).filter(Boolean);
+  $("weekPlan").innerHTML = `<div class="card week">
+    <div class="row"><b>🗺️ ${sat ? "خطة الأسبوع الجاي" : "خطة الأسبوع"}</b><button class="btn ghost sm" data-act="plan">${P.weekday(date) === 6 ? "خططي الأسبوع الجاي" : "عدلي الخطة"}</button></div>
+    ${top && top.length ? `<div class="top3"><small>أهم ٣ أشياء:</small>${top.map((x) => `<span>⭐ ${esc(x)}</span>`).join("")}</div>` : `<p class="hint" style="text-align:start">كل سبت بالليل خططي أسبوعك هنا، وكل يوم يطلع لك هدفه الصبح.</p>`}
+    ${rows}</div>`;
+}
+
+function renderLearn(date) {
+  const goal = D.profile.learn_goal_min || 60, wk = P.learnThisWeek(D.state, date), tip = D.research && D.research.learn;
+  $("learnCard").innerHTML = `<div class="card learn">
+    <div class="row"><b>📚 أتعلم لنفسي</b><span class="chip">${P.ar(wk.min)} / ${P.ar(goal)} دقيقة هذا الأسبوع</span></div>
+    <div class="bar"><i style="width:${Math.min(100, (wk.min / goal) * 100)}%"></i></div>
+    ${tip && tip.topic ? `<div class="tipbox"><small>💡 اقتراح الأسبوع</small><b>${esc(tip.topic)}</b>${tip.why ? `<p>${esc(tip.why)}</p>` : ""}${tip.plan ? `<p>🗒️ ${esc(tip.plan)}</p>` : ""}${tip.resource_url ? `<a href="${esc(tip.resource_url)}" target="_blank" rel="noopener">${esc(tip.resource_title || "المصدر")} ↗</a>` : ""}</div>` : `<p class="hint" style="text-align:start">كل سبت يوصلك اقتراح لشي تتعلمينه مع «أفكار الأسبوع».</p>`}
+    ${wk.items.length ? `<div class="list">${wk.items.map((l) => `<div class="item"><div class="txt">${esc(l.text)}<small>${esc(l.date)} · ${P.ar(l.min)} د</small></div></div>`).join("")}</div>` : ""}
+    <button class="btn" data-act="learn">+ سجلي اللي تعلمتيه</button></div>`;
+}
+
+function openLog() {
+  sheet("✍️ سويت شي ثاني؟", `<p>أي إنجاز برا خطة اليوم، اكتبيه وينحسب لك: تصوير درس، مكالمة عميل، رد على البنات…</p>
+    <form class="form" id="logForm"><textarea id="logText" rows="3" required placeholder="مثلاً: صورت درسين من شابتر الـ AI"></textarea>
+    <button class="btn" type="submit">احفظي (+${P.ar(P.LOG_XP)} نقطة)</button></form>`, () => {
+    $("logText").focus();
+    $("logForm").onsubmit = (e) => { e.preventDefault(); const text = $("logText").value.trim(); if (!text) return; const id = "g" + Date.now(), date = today();
+      update(FILES.state, (s) => { const d = dayOf(s, date); d.log ||= []; if (!d.log.find((x) => x.id === id)) d.log.push({ id, text }); }, "إنجاز إضافي");
+      $("sheet").hidden = true; toast("برافو 👏 انحسب لك"); render(); };
+  });
+}
+function openLearn() {
+  sheet("📚 إيش تعلمتي؟", `<form class="form" id="learnForm">
+    <label>إيش تعلمتي؟<textarea id="lnText" rows="3" required placeholder="مثلاً: أساسيات pandas: قراءة ملف وgroupby"></textarea></label>
+    <label>كم دقيقة؟<input id="lnMin" type="number" inputmode="numeric" min="5" step="5" value="30" required></label>
+    <button class="btn" type="submit">احفظي</button></form>`, () => {
+    $("learnForm").onsubmit = (e) => { e.preventDefault(); const text = $("lnText").value.trim(), min = Number($("lnMin").value) || 0; if (!text || !min) return; const id = "k" + Date.now(), date = today();
+      update(FILES.state, (s) => { const d = dayOf(s, date); d.learn ||= []; if (!d.learn.find((x) => x.id === id)) d.learn.push({ id, text, min }); }, "تعلم");
+      $("sheet").hidden = true; toast(`عقلك يكبر 🧠 +${P.ar(P.learnXP(min))} نقطة`); render(); };
+  });
+}
+function openPlan() {
+  const date = today();
+  const start = P.weekday(date) === 6 ? P.addDays(P.weekStart(date), 7) : P.weekStart(date); // Saturday → plan next week
+  const w = ((D.state.weeks || {})[start]) || { top: ["", "", ""], days: {} };
+  const days = Array.from({ length: 7 }, (_, i) => { const d = P.addDays(start, i), th = D.profile.week ? D.profile.week[String(i)] : null;
+    return `<label>${th ? th.emoji : ""} ${WD[i]} ${esc(d.slice(5))} · ${th ? esc(th.name) : ""}<input id="pd${i}" value="${esc((w.days || {})[d] || "")}" placeholder="${esc(th ? th.goal : "")}"></label>`; }).join("");
+  sheet(`🗺️ خطة أسبوع ${P.dateLabel(start)}`, `<p>اكتبي هدف واحد لكل يوم. لو تركتيه فاضي يطلع هدف اليوم الأساسي.</p>
+    <form class="form" id="planForm">
+      <b>أهم ٣ أشياء هذا الأسبوع</b>
+      ${[0, 1, 2].map((i) => `<input id="pt${i}" value="${esc((w.top || [])[i] || "")}" placeholder="${["مثلاً: أخلص الشابتر الأول من الـ AI", "مثلاً: أتواصل مع ١٠ شركات", "مثلاً: أنزل فيديو يوتيوب"][i]}">`).join("")}
+      <b>هدف كل يوم</b>${days}
+      <button class="btn" type="submit">احفظي الخطة</button></form>`, () => {
+    $("planForm").onsubmit = (e) => { e.preventDefault();
+      const plan = { top: [0, 1, 2].map((i) => $("pt" + i).value.trim()), days: {}, written: date };
+      for (let i = 0; i < 7; i++) { const v = $("pd" + i).value.trim(); if (v) plan.days[P.addDays(start, i)] = v; }
+      update(FILES.state, (s) => { s.weeks ||= {}; s.weeks[start] = plan; }, `خطة أسبوع ${start}`);
+      $("sheet").hidden = true; toast("خطتك جاهزة 🗺️ كل يوم بيطلع لك هدفه الصبح"); render(); };
+  });
+}
 $("openSettings").onclick = () => settings(false);
 
 /* ---------------- boot ---------------- */

@@ -4,6 +4,8 @@
 export const XP_PER_LEVEL = 100;
 export const MAX_LEVEL = 365;
 export const HABIT_XP = 10;
+export const LOG_XP = 30; // "I did something else"
+export const learnXP = (min) => Math.min(60, Math.max(10, Math.round((Number(min) || 0) / 2)));
 export const STAGES = [1, 21, 61, 121, 221, 301]; // first level of each stage (hidden from the UI)
 
 const AR = "٠١٢٣٤٥٦٧٨٩";
@@ -64,32 +66,38 @@ export function doneTaskSet(state, beforeDate) {
 }
 
 /** Today's plan: the next undone tasks in roadmap order. Stable during the day. */
+/* ---- ideal week: each weekday has one theme / goal ---- */
+export function weekStart(date) { return addDays(date, -weekday(date)); } // Sunday
+export function themeOf(date, profile) { return profile.week ? profile.week[String(weekday(date))] : null; }
+export function weekPlan(state, date) { return ((state.weeks || {})[weekStart(date)]) || null; }
+export function planTextFor(state, date) { const w = weekPlan(state, date); return (w && w.days && w.days[date]) || ""; }
+
 export function planFor(date, data) {
   const { profile, roadmap, state } = data;
   const type = dayType(date, profile);
-  const count = (profile.steps_per_day || {})[type] ?? 1;
-  const slots = (profile.slots || {})[type] || [];
+  const theme = themeOf(date, profile);
   const doneBefore = doneTaskSet(state, date);
   const today = dayEntry(state, date);
   const skipped = new Set(today.skipped || []);
-  let pool = expandRoadmap(roadmap).filter((t) => !doneBefore.has(t.id) && !skipped.has(t.id));
-  if (type === "weekend") {
-    const light = pool.slice(0, 6).find((t) => t.kind === "light");
-    pool = light ? [light] : [];
-  } else if (type === "work") {
-    // the golden hour fits one step; prefer the next task that fits in ~60 minutes
-    const fit = pool.slice(0, 4).find((t) => (t.minutes || 60) <= 60);
-    if (fit) pool = [fit, ...pool.filter((t) => t !== fit)];
+  const all = expandRoadmap(roadmap);
+  let pool = all.filter((t) => !doneBefore.has(t.id) && !skipped.has(t.id));
+  let count, slots;
+  if (theme) {
+    const ts = profile.theme_steps || {};
+    count = ts[theme.theme] ?? (type === "leave" ? ts.leave ?? 2 : ts.work ?? 1);
+    if (theme.theme === "learn") count = 0;
+    pool = pool.filter((t) => (t.theme || "camp") === theme.theme);
+    slots = [];
+  } else {
+    count = (profile.steps_per_day || {})[type] ?? 1;
+    slots = (profile.slots || {})[type] || [];
+    if (type === "weekend") { const light = pool.slice(0, 6).find((t) => t.kind === "light"); pool = light ? [light] : []; }
   }
   const steps = pool.slice(0, count).map((t, i) => ({ ...t, slot: slots[i] || slots[slots.length - 1] || "", done: (today.tasks || []).includes(t.id) }));
-  // also show tasks she finished today that are no longer at the front
   for (const id of today.tasks || []) {
-    if (!steps.find((s) => s.id === id)) {
-      const t = expandRoadmap(roadmap).find((x) => x.id === id);
-      if (t) steps.push({ ...t, slot: "إضافي", done: true });
-    }
+    if (!steps.find((s) => s.id === id)) { const t = all.find((x) => x.id === id); if (t) steps.push({ ...t, slot: "إضافي", done: true }); }
   }
-  return { date, type, label: DAY_LABEL[type], steps };
+  return { date, type, label: theme ? `${theme.emoji} يوم ${theme.name}` : DAY_LABEL[type], theme, goalText: planTextFor(state, date) || (theme ? theme.goal : ""), steps };
 }
 
 export function taskXP(t) { return t && t.kind === "light" ? 30 : 60; }
@@ -129,6 +137,8 @@ export function totalXP(state, roadmap) {
     for (const id of e.tasks || []) xp += taskXP(byId[id]);
     xp += (e.habits || []).length * HABIT_XP;
     for (const id of e.content || []) xp += contentXP(id);
+    xp += (e.log || []).length * LOG_XP;
+    for (const l of e.learn || []) xp += learnXP(l.min);
   }
   return xp;
 }
@@ -136,7 +146,7 @@ export function levelOf(xp) { return Math.min(MAX_LEVEL, Math.floor(xp / XP_PER_
 export function stageOf(level) { let s = 1; STAGES.forEach((l, i) => { if (level >= l) s = i + 1; }); return s; }
 export function nextStageIn(level) { const n = STAGES.find((l) => l > level); return n ? n - level : null; }
 
-function activeDay(e) { return (e.tasks || []).length > 0 || (e.habits || []).length >= 3 || (e.content || []).length >= 2; }
+function activeDay(e) { return (e.tasks || []).length > 0 || (e.habits || []).length >= 3 || (e.content || []).length >= 2 || (e.log || []).length > 0 || (e.learn || []).length > 0; }
 export function streak(state, today) {
   let d = today, n = 0;
   if (!activeDay(dayEntry(state, d))) d = addDays(d, -1); // today not finished yet: count from yesterday
@@ -148,13 +158,16 @@ export function counters(state, roadmap, notes) {
   const all = expandRoadmap(roadmap);
   const byId = Object.fromEntries(all.map((t) => [t.id, t]));
   const habit = {}, goal = {}, content = {};
-  let tasks = 0;
+  let tasks = 0, learn_min = 0, logs = 0;
   for (const e of Object.values(state.days || {})) {
     (e.habits || []).forEach((h) => (habit[h] = (habit[h] || 0) + 1));
     (e.content || []).forEach((id) => { const k = contentKind(id); content[k] = (content[k] || 0) + 1; });
+    (e.learn || []).forEach((l) => (learn_min += Number(l.min) || 0));
+    logs += (e.log || []).length;
     (e.tasks || []).forEach((id) => { tasks++; const g = byId[id] && byId[id].goal; if (g) goal[g] = (goal[g] || 0) + 1; });
   }
-  return { habit, goal, content, tasks, notes: (notes || []).length };
+  const plans = Object.values(state.weeks || {}).filter((w) => w && w.days && Object.values(w.days).some(Boolean)).length;
+  return { habit, goal, content, tasks, learn_min, logs, plans, notes: (notes || []).length };
 }
 
 export function earnedItems(items, ctx) {
@@ -168,6 +181,9 @@ export function earnedItems(items, ctx) {
     if (w.level) return level >= w.level;
     if (w.notes) return c.notes >= w.notes;
     if (w.content) return ((c.content || {})[w.content] || 0) >= w.count;
+    if (w.learn_min) return c.learn_min >= w.learn_min;
+    if (w.logs) return c.logs >= w.logs;
+    if (w.plans) return c.plans >= w.plans;
     return false;
   });
 }
@@ -244,4 +260,10 @@ export const MONTH_NAMES = MONTHS;
 
 export function nextCheckpoint(date, profile) {
   return (profile.checkpoints || []).find((c) => c >= date) || null;
+}
+
+export function learnThisWeek(state, date) {
+  const start = weekStart(date); let min = 0; const items = [];
+  for (let i = 0; i < 7; i++) { const d = addDays(start, i); for (const l of ((state.days || {})[d] || {}).learn || []) { min += Number(l.min) || 0; items.push({ ...l, date: d }); } }
+  return { min, items };
 }

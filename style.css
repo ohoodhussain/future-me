@@ -179,3 +179,28 @@ select{color:var(--fg);border-radius:12px;padding:10px 12px;font-size:15px;width
 .sheet-card .links{display:flex;gap:8px;flex-wrap:wrap}
 .sheet-card .links a{color:var(--mint);border:1px solid var(--line);border-radius:99px;padding:4px 12px;text-decoration:none;font-size:13px}
 .sheet-card p.why{color:var(--pale)}
+
+.theme-card{display:flex;gap:12px;align-items:flex-start;border-radius:20px;padding:14px;border:1px solid rgba(227,194,126,.45);background:linear-gradient(160deg,rgba(227,194,126,.10),var(--card))}
+.theme-card .te{font-size:34px;line-height:1}
+.theme-card > div{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1}
+.theme-card small{color:var(--gold);font-weight:700;font-size:12px}
+.theme-card b{font-family:var(--display);font-size:19px;line-height:1.45}
+.theme-card .tip{margin:0;font-size:13px;color:var(--pale)}
+.theme-card.t-family{border-color:var(--line);background:var(--card)}
+.done-log{border-color:var(--em)}
+.btn.sm{padding:5px 12px;font-size:12.5px;border-radius:99px}
+.week,.learn{display:flex;flex-direction:column;gap:8px}
+.week > .row b,.learn > .row b{font-size:16px}
+.top3{display:flex;flex-direction:column;gap:2px;background:var(--bg);border-radius:12px;padding:8px 10px}
+.top3 small{color:var(--dim)}
+.top3 span{font-size:14px}
+.wrow{display:grid;grid-template-columns:92px 1fr;gap:8px;font-size:13.5px;padding:6px 4px;border-top:1px solid rgba(23,64,63,.5)}
+.wrow span:first-child{color:var(--muted)}
+.wrow.now{background:rgba(227,194,126,.07);border-radius:10px}
+.wrow.now span:first-child{color:var(--gold);font-weight:700}
+.wrow.past{opacity:.55}
+.tipbox{display:flex;flex-direction:column;gap:4px;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.tipbox small{color:var(--gold);font-weight:700}
+.tipbox p{margin:0;font-size:13px;color:var(--pale)}
+.tipbox a{color:var(--mint);font-size:13px}
+#planForm label{font-size:12.5px}
